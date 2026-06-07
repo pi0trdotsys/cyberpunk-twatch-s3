@@ -1,4 +1,4 @@
-# Cyberpunk Watch Face — LilyGo T-Watch S3
+# Cyberpunk Watch Face - LilyGo T-Watch S3
 
 Cyberpunkowy watch face dla LilyGo T-Watch S3 (Radio-SX1262) z zielonym tekstem na czarnym tle.
 
