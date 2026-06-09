@@ -3,6 +3,7 @@
 
 static lv_obj_t *lbl_time;
 static lv_obj_t *lbl_date;
+static lv_obj_t *lbl_bat;
 static uint32_t  lastMillis   = 0;
 static uint32_t  lastActivity = 0;
 
@@ -18,8 +19,6 @@ static DispState dispState = STATE_BRIGHT;
 void setupRTC() {
     const char *months[] = {"Jan","Feb","Mar","Apr","May","Jun",
                              "Jul","Aug","Sep","Oct","Nov","Dec"};
-
-    // Parsuj czas kompilacji po stałych pozycjach
     int c_day  = ((__DATE__[4] == ' ') ? 0 : (__DATE__[4] - '0')) * 10
                  + (__DATE__[5] - '0');
     int c_year = (__DATE__[7]-'0')*1000 + (__DATE__[8]-'0')*100
@@ -31,25 +30,15 @@ void setupRTC() {
     int c_hour = (__TIME__[0]-'0')*10 + (__TIME__[1]-'0');
     int c_min  = (__TIME__[3]-'0')*10 + (__TIME__[4]-'0');
     int c_sec  = (__TIME__[6]-'0')*10 + (__TIME__[7]-'0');
-
-    // Czas kompilacji jako sekundy (przybliżone)
     long c_total = c_hour * 3600L + c_min * 60 + c_sec;
 
-    // Odczyt RTC
     struct tm t;
     instance.rtc.getDateTime(&t);
     long r_total = t.tm_hour * 3600L + t.tm_min * 60 + t.tm_sec;
 
-    Serial.printf("RTC:      %d-%02d-%02d %02d:%02d:%02d\n",
-                  1900 + t.tm_year, t.tm_mon + 1, t.tm_mday,
-                  t.tm_hour, t.tm_min, t.tm_sec);
-    Serial.printf("Compiled: %d-%02d-%02d %02d:%02d:%02d\n",
-                  c_year, c_month, c_day, c_hour, c_min, c_sec);
-
-    // Ustaw jeśli rok < 2024 lub różnica czasu > 5 minut
     long diff = abs(r_total - c_total);
     bool wrongYear = (1900 + t.tm_year < 2024);
-    bool bigDiff   = (diff > 300 && diff < 86100); // >5min, <23h55min (wyklucza północ)
+    bool bigDiff   = (diff > 300 && diff < 86100);
 
     if (wrongYear || bigDiff) {
         Serial.println("Setting RTC from compile time");
@@ -73,6 +62,22 @@ void updateTime() {
     snprintf(buf, sizeof(buf), "%s %02d %s %04d",
              dni[wday], t.tm_mday, mies[mon], 1900 + t.tm_year);
     lv_label_set_text(lbl_date, buf);
+
+    // Bateria
+    int bat = instance.pmu.getBatteryPercent();
+    bool chg = instance.pmu.isCharging();
+    if (bat >= 0) {
+        int filled = (bat + 19) / 20;
+        char icon[8];
+        icon[0] = '[';
+        for (int i = 0; i < 5; i++) icon[i+1] = (i < filled) ? '#' : '-';
+        icon[6] = ']';
+        icon[7] = 0;
+        snprintf(buf, sizeof(buf), "%s %d%%%s", icon, bat, chg ? " ^" : "");
+    } else {
+        snprintf(buf, sizeof(buf), "[-----] --%%");
+    }
+    lv_label_set_text(lbl_bat, buf);
 }
 
 void resetActivity() {
@@ -83,6 +88,8 @@ void resetActivity() {
 
 void setup() {
     Serial.begin(115200);
+    delay(2000);
+    Serial.println("=== BOOT ===");
     instance.begin(NO_HW_GPS);
     setupRTC();
 
@@ -90,13 +97,19 @@ void setup() {
     lv_obj_t *scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), LV_PART_MAIN);
     lv_obj_set_style_text_color(scr, lv_color_hex(0x00FF41), LV_PART_MAIN);
+
     lbl_time = lv_label_create(scr);
     lv_obj_set_style_text_font(lbl_time, &lv_font_montserrat_48, LV_PART_MAIN);
     lv_label_set_text(lbl_time, "00:00");
     lv_obj_align(lbl_time, LV_ALIGN_TOP_MID, 0, 10);
+
     lbl_date = lv_label_create(scr);
     lv_label_set_text(lbl_date, "---");
     lv_obj_align(lbl_date, LV_ALIGN_TOP_MID, 0, 70);
+
+    lbl_bat = lv_label_create(scr);
+    lv_label_set_text(lbl_bat, "[-----] --%%");
+    lv_obj_align(lbl_bat, LV_ALIGN_TOP_MID, 0, 110);
 
     instance.setBrightness(BRIGHT);
     lastActivity = millis();
