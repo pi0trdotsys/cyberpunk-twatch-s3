@@ -1,5 +1,8 @@
 #include <LilyGoLib.h>
 #include <LV_Helper.h>
+
+LV_FONT_DECLARE(font_vt323_48);
+LV_FONT_DECLARE(font_vt323_24);
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <HTTPClient.h>
@@ -162,15 +165,17 @@ void setup() {
     lv_obj_set_style_text_color(scr, lv_color_hex(0x00FF41), LV_PART_MAIN);
 
     lbl_time = lv_label_create(scr);
-    lv_obj_set_style_text_font(lbl_time, &lv_font_montserrat_48, LV_PART_MAIN);
+    lv_obj_set_style_text_font(lbl_time, &font_vt323_48, LV_PART_MAIN);
     lv_label_set_text(lbl_time, "00:00");
     lv_obj_align(lbl_time, LV_ALIGN_TOP_MID, 0, 10);
 
     lbl_date = lv_label_create(scr);
+    lv_obj_set_style_text_font(lbl_date, &font_vt323_24, LV_PART_MAIN);
     lv_label_set_text(lbl_date, "---");
     lv_obj_align(lbl_date, LV_ALIGN_TOP_MID, 0, 70);
 
     lbl_bat = lv_label_create(scr);
+    lv_obj_set_style_text_font(lbl_bat, &font_vt323_24, LV_PART_MAIN);
     lv_label_set_text(lbl_bat, "[-----] --%%");
     lv_obj_align(lbl_bat, LV_ALIGN_TOP_MID, 0, 110);
 
