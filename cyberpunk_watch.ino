@@ -12,7 +12,8 @@ LV_FONT_DECLARE(font_vt323_24);
 
 static lv_obj_t *lbl_time;
 static lv_obj_t *lbl_date;
-static lv_obj_t *lbl_bat;
+static lv_obj_t *lbl_bat_bar;
+static lv_obj_t *lbl_bat_pct;
 static uint32_t  lastMillis   = 0;
 static uint32_t  lastActivity = 0;
 static uint32_t  lastNTPSync  = 0;
@@ -127,17 +128,19 @@ void updateTime() {
     int bat = instance.pmu.getBatteryPercent();
     bool chg = instance.pmu.isCharging();
     if (bat >= 0) {
-        int filled = (bat + 19) / 20;
-        char icon[8];
+        int filled = (bat * 10) / 100;
+        char icon[13];
         icon[0] = '[';
-        for (int i = 0; i < 5; i++) icon[i+1] = (i < filled) ? '#' : '-';
-        icon[6] = ']';
-        icon[7] = 0;
-        snprintf(buf, sizeof(buf), "%s %d%%%s", icon, bat, chg ? " ^" : "");
+        for (int i = 0; i < 10; i++) icon[i+1] = (i < filled) ? '#' : '-';
+        icon[11] = ']';
+        icon[12] = 0;
+        lv_label_set_text(lbl_bat_bar, icon);
+        snprintf(buf, sizeof(buf), "%d%%%s", bat, chg ? " ^" : "");
+        lv_label_set_text(lbl_bat_pct, buf);
     } else {
-        snprintf(buf, sizeof(buf), "[-----] --%%");
+        lv_label_set_text(lbl_bat_bar, "[----------]");
+        lv_label_set_text(lbl_bat_pct, "--%");
     }
-    lv_label_set_text(lbl_bat, buf);
 }
 
 void resetActivity() {
@@ -174,10 +177,14 @@ void setup() {
     lv_label_set_text(lbl_date, "---");
     lv_obj_align(lbl_date, LV_ALIGN_TOP_MID, 0, 70);
 
-    lbl_bat = lv_label_create(scr);
-    lv_obj_set_style_text_font(lbl_bat, &font_vt323_24, LV_PART_MAIN);
-    lv_label_set_text(lbl_bat, "[-----] --%%");
-    lv_obj_align(lbl_bat, LV_ALIGN_TOP_MID, 0, 110);
+    lbl_bat_bar = lv_label_create(scr);
+    lv_obj_set_style_text_font(lbl_bat_bar, &font_vt323_24, LV_PART_MAIN);
+    lv_label_set_text(lbl_bat_bar, "[----------]");
+    lv_obj_align(lbl_bat_bar, LV_ALIGN_TOP_MID, 0, 110);
+    lbl_bat_pct = lv_label_create(scr);
+    lv_obj_set_style_text_font(lbl_bat_pct, &font_vt323_24, LV_PART_MAIN);
+    lv_label_set_text(lbl_bat_pct, "--%");
+    lv_obj_align(lbl_bat_pct, LV_ALIGN_TOP_MID, 0, 140);
 
     instance.setBrightness(BRIGHT);
     lastActivity = millis();
