@@ -1,11 +1,19 @@
 #include <LilyGoLib.h>
 #include <LV_Helper.h>
+#include <WiFi.h>
+#include <WiFiMulti.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <ArduinoJson.h>
+#include "secrets.h"
 
 static lv_obj_t *lbl_time;
 static lv_obj_t *lbl_date;
 static lv_obj_t *lbl_bat;
 static uint32_t  lastMillis   = 0;
 static uint32_t  lastActivity = 0;
+static uint32_t  lastNTPSync  = 0;
+#define NTP_INTERVAL (4UL * 60 * 60 * 1000)  // 4 godziny
 
 #define BRIGHT        DEVICE_MAX_BRIGHTNESS_LEVEL
 #define DIM           30
@@ -15,6 +23,8 @@ static uint32_t  lastActivity = 0;
 
 typedef enum { STATE_BRIGHT, STATE_DIM, STATE_OFF } DispState;
 static DispState dispState = STATE_BRIGHT;
+
+WiFiMulti wifiMulti;
 
 void setupRTC() {
     const char *months[] = {"Jan","Feb","Mar","Apr","May","Jun",
@@ -35,17 +45,65 @@ void setupRTC() {
     struct tm t;
     instance.rtc.getDateTime(&t);
     long r_total = t.tm_hour * 3600L + t.tm_min * 60 + t.tm_sec;
-
     long diff = abs(r_total - c_total);
     bool wrongYear = (1900 + t.tm_year < 2024);
     bool bigDiff   = (diff > 300 && diff < 86100);
 
     if (wrongYear || bigDiff) {
-        Serial.println("Setting RTC from compile time");
+        Serial.println("RTC: set from compile time");
         instance.rtc.setDateTime(c_year, c_month, c_day, c_hour, c_min, c_sec);
     } else {
-        Serial.println("RTC OK, skipping");
+        Serial.println("RTC: OK");
     }
+}
+
+bool syncTimeFromAPI() {
+    if (wifiMulti.run(15000) != WL_CONNECTED) {
+        Serial.println("NTP: no WiFi");
+        return false;
+    }
+    Serial.printf("NTP: connected to %s\n", WiFi.SSID().c_str());
+
+    WiFiClientSecure client;
+    client.setInsecure();  // bez weryfikacji certyfikatu
+    HTTPClient http;
+    http.begin(client, "https://timeapi.io/api/time/current/zone?timeZone=Europe/Warsaw");
+    http.setTimeout(8000);
+    int code = http.GET();
+
+    if (code != 200) {
+        Serial.printf("NTP: HTTP error %d\n", code);
+        http.end();
+        WiFi.disconnect(true);
+        return false;
+    }
+
+    String payload = http.getString();
+    http.end();
+
+    Serial.printf("NTP payload: %s\n", payload.c_str());
+    // Parsuj JSON - timeapi.io zwraca osobne pola
+    JsonDocument doc;
+    if (deserializeJson(doc, payload) != DeserializationError::Ok) {
+        Serial.println("NTP: JSON error");
+        WiFi.disconnect(true);
+        return false;
+    }
+
+    int year   = doc["year"];
+    int month  = doc["month"];
+    int day    = doc["day"];
+    int hour   = doc["hour"];
+    int minute = doc["minute"];
+    int sec    = doc["seconds"];
+
+    Serial.printf("NTP parsed: %d-%02d-%02d %02d:%02d:%02d\n",
+                  year, month, day, hour, minute, sec);
+
+    instance.rtc.setDateTime(year, month, day, hour, minute, sec);
+    WiFi.disconnect(true);
+    lastNTPSync = millis();
+    return true;
 }
 
 void updateTime() {
@@ -63,7 +121,6 @@ void updateTime() {
              dni[wday], t.tm_mday, mies[mon], 1900 + t.tm_year);
     lv_label_set_text(lbl_date, buf);
 
-    // Bateria
     int bat = instance.pmu.getBatteryPercent();
     bool chg = instance.pmu.isCharging();
     if (bat >= 0) {
@@ -88,10 +145,16 @@ void resetActivity() {
 
 void setup() {
     Serial.begin(115200);
-    delay(2000);
-    Serial.println("=== BOOT ===");
     instance.begin(NO_HW_GPS);
     setupRTC();
+
+    // Dodaj sieci WiFi
+    for (int i = 0; i < WIFI_NETWORK_COUNT; i++) {
+        wifiMulti.addAP(WIFI_SSIDS[i], WIFI_PASSES[i]);
+    }
+
+    // Synchronizuj czas przy starcie
+    syncTimeFromAPI();
 
     beginLvglHelper(instance);
     lv_obj_t *scr = lv_screen_active();
@@ -135,6 +198,11 @@ void loop() {
         instance.lightSleep(WAKEUP_SRC_TOUCH_PANEL);
         resetActivity();
         updateTime();
+    }
+
+    // Synchronizacja co 4 godziny
+    if (millis() - lastNTPSync >= NTP_INTERVAL) {
+        syncTimeFromAPI();
     }
 
     if (millis() - lastMillis >= 1000) {
