@@ -14,6 +14,7 @@ static lv_obj_t *lbl_time;
 static lv_obj_t *lbl_date;
 static lv_obj_t *lbl_bat_bar;
 static lv_obj_t *lbl_bat_pct;
+static lv_obj_t *lbl_steps;
 static uint32_t  lastMillis   = 0;
 static uint32_t  lastActivity = 0;
 static uint32_t  lastNTPSync  = 0;
@@ -141,6 +142,9 @@ void updateTime() {
         lv_label_set_text(lbl_bat_bar, "[----------]");
         lv_label_set_text(lbl_bat_pct, "--%");
     }
+    uint32_t steps = instance.sensor.getPedometerCounter();
+    snprintf(buf, sizeof(buf), "STEPS: %lu", steps);
+    lv_label_set_text(lbl_steps, buf);
 }
 
 void resetActivity() {
@@ -152,6 +156,7 @@ void resetActivity() {
 void setup() {
     Serial.begin(115200);
     instance.begin(NO_HW_GPS);
+    instance.sensor.enablePedometer();
     setupRTC();
 
     // Dodaj sieci WiFi
@@ -185,6 +190,10 @@ void setup() {
     lv_obj_set_style_text_font(lbl_bat_pct, &font_vt323_24, LV_PART_MAIN);
     lv_label_set_text(lbl_bat_pct, "--%");
     lv_obj_align(lbl_bat_pct, LV_ALIGN_TOP_MID, 0, 140);
+    lbl_steps = lv_label_create(scr);
+    lv_obj_set_style_text_font(lbl_steps, &font_vt323_24, LV_PART_MAIN);
+    lv_label_set_text(lbl_steps, "STEPS: 0");
+    lv_obj_align(lbl_steps, LV_ALIGN_TOP_MID, 0, 170);
 
     instance.setBrightness(BRIGHT);
     lastActivity = millis();
